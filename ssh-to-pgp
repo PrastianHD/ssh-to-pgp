@@ -1,0 +1,109 @@
+#!/usr/bin/python
+#
+# Copyright (c) 2017 Catalyst.net Ltd
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
+"""
+Convert an OpenSSH private RSA key in to an OpenPGP compatible format, optionally importing it in to GnuPG 2.
+
+Michael Fincham <michael.fincham@catalyst.net.nz>
+"""
+
+import argparse
+import base64
+import getpass
+import os
+import struct
+import subprocess
+import sys
+
+import Crypto.PublicKey.RSA
+import Crypto.Util.number
+import OpenPGP
+import OpenPGP.Crypto
+
+def openssl_decode_ssh_key(path, private=False):
+    environment = os.environ.copy()
+    arguments = ['openssl', 'rsa', '-in', path]
+    if not private:
+        arguments.append('-pubout')
+
+    return subprocess.check_output(arguments, env=environment)
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('action', choices=('dry-run', 'convert', 'import'), default='dry-run', help='whether to test the conversion (dry-run), perform the conversion and output the new key (convert) or to convert the key and then import it in to GnuPG (import)')
+    parser.add_argument('--ssh-key-path', help='path to OpenSSH private key, defaults to ~/.ssh/id_rsa', default="%s/.ssh/id_rsa" % os.path.expanduser('~'))
+    args = parser.parse_args()
+    action = args.action
+    ssh_key_path = args.ssh_key_path
+
+    print "Reading SSH private key from %s..." % ssh_key_path
+    # decode OpenSSH key from file
+    ssh_private_key = Crypto.PublicKey.RSA.importKey(openssl_decode_ssh_key(ssh_key_path, private=True))
+
+    # Create a new OpenPGP secret key packet from the same RSA parameters
+    pgp_private_key = OpenPGP.SecretKeyPacket((
+    	Crypto.Util.number.long_to_bytes(ssh_private_key.n),
+    	Crypto.Util.number.long_to_bytes(ssh_private_key.e),
+    	Crypto.Util.number.long_to_bytes(ssh_private_key.d),
+    	Crypto.Util.number.long_to_bytes(ssh_private_key.p),
+    	Crypto.Util.number.long_to_bytes(ssh_private_key.q),
+    	Crypto.Util.number.long_to_bytes(ssh_private_key.u)
+    ))
+
+    # The UID needs to include a name and at least one other component due to
+    # bugs in the underlying library (https://github.com/singpolyma/OpenPGP-Python/issues/18)
+    pgp_uid = OpenPGP.UserIDPacket(name='Imported from SSH private key', comment=ssh_key_path)
+
+    # the Message class differs slightly from a normal list, the custom append() method
+    # is used below, so this needs to be a Message before the signature is computed
+    packet_list = OpenPGP.Message([pgp_private_key, pgp_uid])
+
+    pgp_sig = OpenPGP.SignaturePacket(packet_list, 'RSA', 'SHA256')
+    pgp_sig.signature_type = 0x10 # "Generic certification of a User ID and Public-Key packet."
+    pgp_sig.hashed_subpackets.append(OpenPGP.SignaturePacket.KeyFlagsPacket([0x20])) # "This key may be used for authentication."
+    pgp_sig.hashed_subpackets.append(OpenPGP.SignaturePacket.IssuerPacket(pgp_private_key.fingerprint()[-16:]))
+
+    # Special append method from Message class, don't ask me why
+    packet_list.append(pgp_sig)
+
+    # Compile the signature and packet list to be printed
+    pgp_wrapped_key = OpenPGP.Crypto.Wrapper(pgp_private_key)
+    pgp_message = pgp_wrapped_key.sign_key_userid(packet_list)
+
+    bytes_for_gnupg = pgp_message.to_bytes()
+
+    print ""
+    print "Generated PGP key overview"
+    print "--------------------------"
+    gnupg_process = subprocess.Popen(['gpg2', '--list-packets'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    stdout, stderr = gnupg_process.communicate(bytes_for_gnupg)
+    print stdout
+    
+    if action == 'import':
+        print "Import this key in to GnuPG without a passphrase? [y/N]",
+        import_decision = raw_input().lower()
+
+        if import_decision == 'y':
+            gnupg_process = subprocess.Popen(['gpg2', '--import'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            stdout, stderr = gnupg_process.communicate(bytes_for_gnupg)
+    elif action == 'convert':
+        print ""
+        print "Private PGP authentication key without passphrase"
+        print "-------------------------------------------------"
+        print ""
+        print OpenPGP.enarmor(bytes_for_gnupg, marker="PRIVATE KEY BLOCK")
