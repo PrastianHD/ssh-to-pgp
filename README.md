@@ -127,7 +127,7 @@ Once the card is confirmed working the private part of the generated key can be 
 
 ## Limitations
 
-The decrypted private key will be kept in memory by the `ssh-to-pgp` script. Python currently provides no effective way to ensure the safe handling of this key material, nor will it be encrypted when it is saved to disk by GnuPG during import. For this reason it may be preferable to perform this process will booted from a live CD or similar memory-resident operating system, then rebooting afterwards. Remember to export and retain the public part of the key even after it has been migrated, as this is needed for SSH authentication to take place (e.g. `gpg2 --export-key ...`).
+The decrypted private key will be kept in memory by the `ssh-to-pgp` script. Python currently provides no effective way to ensure the safe handling of this key material, nor will it be encrypted when it is saved to disk by GnuPG during import. For this reason it may be preferable to perform this process while booted from a live CD, then rebooting afterwards. Remember to export and retain the public part of the key even after it has been migrated, as this is needed for SSH authentication to take place (e.g. `gpg2 --export-key ...`).
 
 The `ssh-to-pgp` script has very little in the way of error checking. Any problems encountered during the process will likely result in cryptic error messages.
 
