@@ -24,7 +24,7 @@ First a new key is created for use with the demo.
 
 Next `ssh-to-pgp` is used to create a new OpenPGP message containing the same RSA key, and this is imported directly in to GnuPG. It is important to note that the key will currently be imported without a passphrase (and therefore will not be encrypted when it is stored on disk).
 
-    fincham@laptop:~/Documents/Development/ssh-to-pgp$ python ./ssh-to-pgp --ssh-key-path=/home/fincham/.ssh/demo_id_rsa import
+    fincham@laptop:~/Documents/Development/ssh-to-pgp$ ./ssh-to-pgp --ssh-key-path=/home/fincham/.ssh/demo_id_rsa import
     Reading SSH private key from /home/fincham/.ssh/demo_id_rsa...
     writing RSA key
 
