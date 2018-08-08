@@ -1,6 +1,8 @@
 # ssh-to-pgp
 
-Requirements: [OpenPGP-Python](https://github.com/singpolyma/OpenPGP-Python), [pycrypto](https://pypi.python.org/pypi/pycrypto)
+**Security warning:** Do not use this tool for generating ElGamal keys! Due to a currently unfixed bug in the cryptography library used these keys will be unsafe. For more information see https://nvd.nist.gov/vuln/detail/CVE-2018-6594.
+
+*Requirements:* [OpenPGP-Python](https://github.com/singpolyma/OpenPGP-Python), [pycrypto](https://pypi.python.org/pypi/pycrypto)
 
 This tool converts an SSH key in to an OpenPGP compatible authentication key. This can be helpful if you use the `gpg-agent` as your SSH agent, or if you want to migrate an existing SSH private key in to an OpenPGP compatible smartcard.
 
